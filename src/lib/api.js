@@ -50,9 +50,9 @@ export async function submitWorkoutLogs({ workoutId, logs, session }) {
 
 export async function createWorkoutTemplate({ payload, session }) {
   const response = await fetch(`${API_BASE_URL}/api/workouts/create`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...(await buildAuthHeaders(session)),
     },
     body: JSON.stringify(payload),

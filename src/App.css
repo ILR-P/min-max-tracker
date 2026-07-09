@@ -126,7 +126,11 @@ button:disabled {
 }
 
 .tab-button.active {
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 45%, #10b981));
+  background: linear-gradient(
+    135deg,
+    var(--accent),
+    color-mix(in srgb, var(--accent) 45%, #10b981)
+  );
   color: white;
   border-color: transparent;
 }
@@ -433,8 +437,12 @@ button:focus-visible {
   cursor: pointer;
 }
 
-.create-controls button[type='submit'] {
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 45%, #10b981));
+.create-controls button[type="submit"] {
+  background: linear-gradient(
+    135deg,
+    var(--accent),
+    color-mix(in srgb, var(--accent) 45%, #10b981)
+  );
   color: white;
 }
 
