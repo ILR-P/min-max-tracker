@@ -1,9 +1,9 @@
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.env
+# Root app
+node_modules/
+dist/
+.env
 
-# Backend
-backend/venv/
-backend/__pycache__/
-backend/.env
+# Vercel / Python
+.vercel/
+__pycache__/
+api/__pycache__/
