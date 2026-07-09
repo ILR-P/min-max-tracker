@@ -11,7 +11,7 @@ class SetLogInput(BaseModel):
 
 
 class WorkoutQuery(BaseModel):
-    user_id: str
+    user_id: str | None = None
     week_number: int = Field(ge=1, le=12)
     day_of_week: int = Field(ge=1, le=7)
 
@@ -54,7 +54,7 @@ class WorkoutResponse(BaseModel):
 
 
 class WorkoutLogsRequest(BaseModel):
-    user_id: str
+    user_id: str | None = None
     logs: list[SetLogInput]
 
 

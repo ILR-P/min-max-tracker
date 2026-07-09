@@ -1,15 +1,26 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
-export async function getCurrentWorkout({ userId, weekNumber, dayOfWeek }) {
+async function buildAuthHeaders(session) {
+  if (!session?.access_token) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${session.access_token}`,
+  };
+}
+
+export async function getCurrentWorkout({ weekNumber, dayOfWeek, session }) {
   const url = new URL(
     `${API_BASE_URL}/api/workouts/current`,
     window.location.origin,
   );
-  url.searchParams.set("user_id", userId);
   url.searchParams.set("week_number", String(weekNumber));
   url.searchParams.set("day_of_week", String(dayOfWeek));
 
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    headers: await buildAuthHeaders(session),
+  });
   if (!response.ok) {
     throw new Error(`Failed to load workout: ${response.status}`);
   }
@@ -17,15 +28,16 @@ export async function getCurrentWorkout({ userId, weekNumber, dayOfWeek }) {
   return response.json();
 }
 
-export async function submitWorkoutLogs({ workoutId, userId, logs }) {
+export async function submitWorkoutLogs({ workoutId, logs, session }) {
   const response = await fetch(
     `${API_BASE_URL}/api/workouts/${workoutId}/logs`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(await buildAuthHeaders(session)),
       },
-      body: JSON.stringify({ user_id: userId, logs }),
+      body: JSON.stringify({ logs }),
     },
   );
 

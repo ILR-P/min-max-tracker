@@ -5,9 +5,10 @@ import { getCurrentWorkout, submitWorkoutLogs } from '../lib/api'
 import ExerciseCard from './ExerciseCard'
 import WorkoutHeader from './WorkoutHeader'
 
-const currentUserId = 'demo-user'
-const defaultWeekNumber = 2
-const defaultDayOfWeek = 2
+function getLocalDayOfWeek() {
+  const day = new Date().getDay()
+  return day === 0 ? 7 : day
+}
 
 function buildInitialSetState(exercises) {
   return exercises.reduce((accumulator, exercise) => {
@@ -20,11 +21,13 @@ function buildInitialSetState(exercises) {
   }, {})
 }
 
-export default function WorkoutDashboard() {
+export default function WorkoutDashboard({ session }) {
   const [workout, setWorkout] = useState(demoWorkout)
   const [setState, setSetState] = useState(() => buildInitialSetState(demoWorkout.exercises))
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const [weekNumber, setWeekNumber] = useState(1)
+  const [dayOfWeek, setDayOfWeek] = useState(getLocalDayOfWeek())
 
   useEffect(() => {
     let active = true
@@ -32,9 +35,9 @@ export default function WorkoutDashboard() {
     async function loadWorkout() {
       try {
         const response = await getCurrentWorkout({
-          userId: currentUserId,
-          weekNumber: defaultWeekNumber,
-          dayOfWeek: defaultDayOfWeek,
+          weekNumber,
+          dayOfWeek,
+          session,
         })
 
         if (!active) {
@@ -60,7 +63,7 @@ export default function WorkoutDashboard() {
     return () => {
       active = false
     }
-  }, [])
+  }, [dayOfWeek, session, weekNumber])
 
   const exerciseCount = useMemo(() => workout.exercises.length, [workout.exercises.length])
 
@@ -93,8 +96,8 @@ export default function WorkoutDashboard() {
     try {
       await submitWorkoutLogs({
         workoutId: workout.workout_id,
-        userId: workout.user_id ?? currentUserId,
         logs,
+        session,
       })
       setStatus('saved')
     } catch {
@@ -109,6 +112,30 @@ export default function WorkoutDashboard() {
       <div className="ambient ambient-right" />
 
       <WorkoutHeader workout={workout} />
+
+      <section className="control-strip">
+        <label>
+          Week
+          <select value={weekNumber} onChange={(event) => setWeekNumber(Number(event.target.value))}>
+            {Array.from({ length: 12 }, (_, index) => index + 1).map((value) => (
+              <option key={value} value={value}>
+                Week {value}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Day
+          <select value={dayOfWeek} onChange={(event) => setDayOfWeek(Number(event.target.value))}>
+            <option value={1}>Monday</option>
+            <option value={2}>Tuesday</option>
+            <option value={3}>Wednesday</option>
+            <option value={4}>Thursday</option>
+            <option value={5}>Friday</option>
+          </select>
+        </label>
+      </section>
 
       <section className="dashboard-strip">
         <div className="dashboard-stat">
