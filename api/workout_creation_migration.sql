@@ -1,3 +1,12 @@
+alter table if exists blocks
+    add column if not exists owner_user_id uuid references auth.users (id) on delete cascade;
+
+alter table if exists blocks
+    drop constraint if exists blocks_name_key;
+
+create unique index if not exists idx_blocks_global_name on blocks (name) where owner_user_id is null;
+create unique index if not exists idx_blocks_owner_name on blocks (owner_user_id, name) where owner_user_id is not null;
+
 alter table if exists exercises_template
     add column if not exists rest_seconds smallint not null default 60 check (rest_seconds >= 0);
 

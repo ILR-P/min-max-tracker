@@ -2,7 +2,8 @@ create extension if not exists pgcrypto;
 
 create table if not exists blocks (
     id uuid primary key default gen_random_uuid(),
-    name text not null unique,
+    owner_user_id uuid references auth.users (id) on delete cascade,
+    name text not null,
     description text
 );
 
@@ -64,4 +65,6 @@ create index if not exists idx_workouts_week_id_day on workouts (week_id, day_of
 create index if not exists idx_exercises_template_workout_id on exercises_template (workout_id);
 create index if not exists idx_exercise_working_sets_template_id on exercise_working_sets (exercise_template_id);
 create index if not exists idx_user_logs_user_template_date on user_logs (user_id, exercise_template_id, logged_date desc);
+create unique index if not exists idx_blocks_global_name on blocks (name) where owner_user_id is null;
+create unique index if not exists idx_blocks_owner_name on blocks (owner_user_id, name) where owner_user_id is not null;
 

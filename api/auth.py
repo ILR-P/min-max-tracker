@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 import jwt
-from fastapi import Header, HTTPException, Query, status
+from fastapi import Header, HTTPException, status
 from jwt.algorithms import RSAAlgorithm
 
 from .config import get_settings
@@ -81,7 +81,6 @@ def _verify_supabase_token(token: str) -> dict[str, Any]:
 
 def resolve_user_id(
     authorization: str | None = Header(default=None),
-    user_id: str | None = Query(default=None),
 ) -> str | None:
     token = _extract_bearer_token(authorization)
     if token:
@@ -90,8 +89,5 @@ def resolve_user_id(
         if not subject:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token is missing subject")
         return str(subject)
-
-    if user_id:
-        return user_id
 
     return None

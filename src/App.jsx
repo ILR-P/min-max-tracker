@@ -12,7 +12,7 @@ function AuthPanel({ authMode, email, password, onSubmit, onToggleMode, onEmailC
         <p className="eyebrow">Supabase Auth</p>
         <h1>Sign in to your workout tracker</h1>
         <p className="auth-copy">
-          Log in with your Supabase user so the dashboard can read workouts and save sets through the backend.
+          Each user gets their own workouts and logs. Sign in or create an account to keep your data separate.
         </p>
 
         <form className="auth-form" onSubmit={onSubmit}>

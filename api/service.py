@@ -83,7 +83,7 @@ class WorkoutService:
         if self.client is None:
             return self._demo_workout(user_id=user_id, week_number=week_number, day_of_week=day_of_week)
 
-        workout = self._fetch_current_workout(week_number=week_number, day_of_week=day_of_week)
+        workout = self._fetch_current_workout(user_id=user_id, week_number=week_number, day_of_week=day_of_week)
         if workout is None:
             raise HTTPException(status_code=404, detail="Workout not found")
 
@@ -145,7 +145,7 @@ class WorkoutService:
                 "exercise_template_ids": [str(uuid4()) for _ in payload.get("exercises", [])],
             }
 
-        block_id = self._upsert_block(payload["block_name"], payload.get("block_description"))
+        block_id = self._upsert_block(user_id, payload["block_name"], payload.get("block_description"))
         week_id = self._upsert_week(block_id, payload["week_number"])
         workout_id = self._upsert_workout(week_id, payload["workout_name"], payload["day_of_week"], payload.get("workout_summary"))
 
@@ -162,27 +162,31 @@ class WorkoutService:
             "exercise_template_ids": exercise_template_ids,
         }
 
-    def _fetch_current_workout(self, week_number: int, day_of_week: int) -> dict[str, Any] | None:
+    def _fetch_current_workout(self, user_id: str, week_number: int, day_of_week: int) -> dict[str, Any] | None:
         week_response = (
             self.client.table("weeks")
-            .select("id, block_id, week_number")
+            .select("id, block_id, week_number, blocks!inner(id, name, owner_user_id)")
             .eq("week_number", week_number)
+            .eq("blocks.owner_user_id", user_id)
             .limit(1)
             .execute()
         )
 
         if not week_response.data:
+            week_response = (
+                self.client.table("weeks")
+                .select("id, block_id, week_number, blocks!inner(id, name, owner_user_id)")
+                .eq("week_number", week_number)
+                .is_("blocks.owner_user_id", None)
+                .limit(1)
+                .execute()
+            )
+
+        if not week_response.data:
             return None
 
         week_row = week_response.data[0]
-        block_response = (
-            self.client.table("blocks")
-            .select("id, name")
-            .eq("id", week_row["block_id"])
-            .limit(1)
-            .execute()
-        )
-        block_row = block_response.data[0] if block_response.data else {}
+        block_row = week_row.get("blocks") or {}
 
         workout_response = (
             self.client.table("workouts")
@@ -265,14 +269,21 @@ class WorkoutService:
         )
         return list(response.data or [])
 
-    def _upsert_block(self, block_name: str, block_description: str | None) -> str:
-        existing = self.client.table("blocks").select("id").eq("name", block_name).limit(1).execute()
+    def _upsert_block(self, user_id: str, block_name: str, block_description: str | None) -> str:
+        existing = (
+            self.client.table("blocks")
+            .select("id")
+            .eq("owner_user_id", user_id)
+            .eq("name", block_name)
+            .limit(1)
+            .execute()
+        )
         if existing.data:
             block_id = existing.data[0]["id"]
             self.client.table("blocks").update({"description": block_description}).eq("id", block_id).execute()
             return block_id
 
-        response = self.client.table("blocks").insert({"name": block_name, "description": block_description}).execute()
+        response = self.client.table("blocks").insert({"owner_user_id": user_id, "name": block_name, "description": block_description}).execute()
         return response.data[0]["id"]
 
     def _upsert_week(self, block_id: str, week_number: int) -> str:

@@ -39,7 +39,7 @@ def get_current_workout(
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Provide a Bearer token or a user_id query parameter",
+            detail="Provide a Bearer token",
         )
 
     query = WorkoutQuery(user_id=user_id, week_number=week_number, day_of_week=day_of_week)
@@ -56,16 +56,15 @@ def submit_workout_logs(
     payload: WorkoutLogsRequest,
     user_id: str | None = Depends(resolve_user_id),
 ) -> dict:
-    resolved_user_id = user_id or payload.user_id
-    if not resolved_user_id:
+    if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Provide a Bearer token or include user_id in the request body",
+            detail="Provide a Bearer token",
         )
 
     return get_service().submit_workout_logs(
         workout_id=workout_id,
-        user_id=resolved_user_id,
+        user_id=user_id,
         logs=[log.model_dump() for log in payload.logs],
     )
 
@@ -78,4 +77,4 @@ def create_workout(payload: CreateWorkoutRequest, user_id: str | None = Depends(
             detail="Provide a Bearer token to create workouts",
         )
 
-    return get_service().create_workout(payload.model_dump())
+    return get_service().create_workout(payload.model_dump(), user_id=user_id)
