@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, status
 from .auth import resolve_user_id
 from .config import get_settings
 from .database import get_supabase_client
-from .schemas import WorkoutLogsRequest, WorkoutLogsResponse, WorkoutQuery, WorkoutResponse
+from .schemas import CreateWorkoutRequest, CreateWorkoutResponse, WorkoutLogsRequest, WorkoutLogsResponse, WorkoutQuery, WorkoutResponse
 from .service import WorkoutService
 
 settings = get_settings()
@@ -68,3 +68,14 @@ def submit_workout_logs(
         user_id=resolved_user_id,
         logs=[log.model_dump() for log in payload.logs],
     )
+
+
+@app.post(f"{settings['api_prefix']}/workouts/create", response_model=CreateWorkoutResponse)
+def create_workout(payload: CreateWorkoutRequest, user_id: str | None = Depends(resolve_user_id)) -> dict:
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Provide a Bearer token to create workouts",
+        )
+
+    return get_service().create_workout(payload.model_dump())

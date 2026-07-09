@@ -47,3 +47,20 @@ export async function submitWorkoutLogs({ workoutId, logs, session }) {
 
   return response.json();
 }
+
+export async function createWorkoutTemplate({ payload, session }) {
+  const response = await fetch(`${API_BASE_URL}/api/workouts/create`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(await buildAuthHeaders(session)),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to create workout: ${response.status}`);
+  }
+
+  return response.json();
+}

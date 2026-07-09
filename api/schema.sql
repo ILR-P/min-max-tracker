@@ -31,8 +31,20 @@ create table if not exists exercises_template (
     rep_range text not null,
     rir_target text,
     intensity_technique text,
+    rest_seconds smallint not null default 60 check (rest_seconds >= 0),
     notes text,
     constraint exercises_template_workout_name_unique unique (workout_id, exercise_name)
+);
+
+create table if not exists exercise_working_sets (
+    id uuid primary key default gen_random_uuid(),
+    exercise_template_id uuid not null references exercises_template (id) on delete cascade,
+    set_number smallint not null check (set_number between 1 and 4),
+    load numeric(8, 2) not null check (load >= 0),
+    reps smallint not null check (reps >= 0),
+    rest_seconds smallint not null default 60 check (rest_seconds >= 0),
+    notes text,
+    constraint exercise_working_sets_unique unique (exercise_template_id, set_number)
 );
 
 create table if not exists user_logs (
@@ -50,4 +62,6 @@ create index if not exists idx_weeks_block_id on weeks (block_id);
 create index if not exists idx_weeks_block_week on weeks (block_id, week_number);
 create index if not exists idx_workouts_week_id_day on workouts (week_id, day_of_week);
 create index if not exists idx_exercises_template_workout_id on exercises_template (workout_id);
+create index if not exists idx_exercise_working_sets_template_id on exercise_working_sets (exercise_template_id);
 create index if not exists idx_user_logs_user_template_date on user_logs (user_id, exercise_template_id, logged_date desc);
+

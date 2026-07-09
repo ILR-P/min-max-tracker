@@ -88,7 +88,12 @@ class WorkoutService:
             raise HTTPException(status_code=404, detail="Workout not found")
 
         exercises = self._fetch_exercises(workout["id"])
-        previous_workout = self._fetch_previous_workout(week_number=week_number, day_of_week=day_of_week)
+        previous_workout = self._fetch_previous_workout(
+            block_id=workout["block_id"],
+            week_number=week_number,
+            day_of_week=day_of_week,
+            workout_name=workout["workout_name"],
+        )
         previous_exercises = self._fetch_exercises(previous_workout["id"]) if previous_workout else []
         previous_by_name = {exercise["exercise_name"].lower(): exercise for exercise in previous_exercises}
 
@@ -131,6 +136,32 @@ class WorkoutService:
 
         return {"workout_id": workout_id, "inserted_rows": len(result.data or payload), "payload": result.data or payload}
 
+    def create_workout(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.client is None:
+            return {
+                "block_id": str(uuid4()),
+                "week_id": str(uuid4()),
+                "workout_id": str(uuid4()),
+                "exercise_template_ids": [str(uuid4()) for _ in payload.get("exercises", [])],
+            }
+
+        block_id = self._upsert_block(payload["block_name"], payload.get("block_description"))
+        week_id = self._upsert_week(block_id, payload["week_number"])
+        workout_id = self._upsert_workout(week_id, payload["workout_name"], payload["day_of_week"], payload.get("workout_summary"))
+
+        exercise_template_ids: list[str] = []
+        for exercise in payload.get("exercises", []):
+            exercise_template_id = self._upsert_exercise_template(workout_id, exercise)
+            exercise_template_ids.append(exercise_template_id)
+            self._replace_working_set_templates(exercise_template_id, exercise.get("working_set_templates", []))
+
+        return {
+            "block_id": block_id,
+            "week_id": week_id,
+            "workout_id": workout_id,
+            "exercise_template_ids": exercise_template_ids,
+        }
+
     def _fetch_current_workout(self, week_number: int, day_of_week: int) -> dict[str, Any] | None:
         week_response = (
             self.client.table("weeks")
@@ -172,30 +203,48 @@ class WorkoutService:
             "day_of_week": workout_row["day_of_week"],
             "workout_summary": workout_row.get("workout_summary"),
             "week_number": week_row.get("week_number"),
+            "block_id": week_row["block_id"],
             "block_name": block_row.get("name"),
         }
 
-    def _fetch_previous_workout(self, week_number: int, day_of_week: int) -> dict[str, Any] | None:
-        if week_number <= 1:
-            return None
-
-        week_response = (
+    def _fetch_previous_workout(
+        self,
+        block_id: str,
+        week_number: int,
+        day_of_week: int,
+        workout_name: str,
+    ) -> dict[str, Any] | None:
+        previous_week_response = (
             self.client.table("weeks")
             .select("id, week_number")
-            .eq("week_number", week_number - 1)
+            .eq("block_id", block_id)
+            .lt("week_number", week_number)
+            .order("week_number", desc=True)
             .limit(1)
             .execute()
         )
 
-        if not week_response.data:
-            return None
+        if previous_week_response.data:
+            previous_week_row = previous_week_response.data[0]
+        else:
+            wrapped_week_response = (
+                self.client.table("weeks")
+                .select("id, week_number")
+                .eq("block_id", block_id)
+                .order("week_number", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if not wrapped_week_response.data:
+                return None
+            previous_week_row = wrapped_week_response.data[0]
 
-        previous_week_row = week_response.data[0]
         response = (
             self.client.table("workouts")
             .select("id, name, day_of_week")
             .eq("week_id", previous_week_row["id"])
             .eq("day_of_week", day_of_week)
+            .eq("name", workout_name)
             .limit(1)
             .execute()
         )
@@ -209,12 +258,95 @@ class WorkoutService:
     def _fetch_exercises(self, workout_id: str) -> list[dict[str, Any]]:
         response = (
             self.client.table("exercises_template")
-            .select("id, exercise_name, warm_up_sets, working_sets, rep_range, rir_target, intensity_technique, notes")
+            .select("id, exercise_name, warm_up_sets, working_sets, rep_range, rir_target, intensity_technique, rest_seconds, notes")
             .eq("workout_id", workout_id)
             .order("id")
             .execute()
         )
         return list(response.data or [])
+
+    def _upsert_block(self, block_name: str, block_description: str | None) -> str:
+        existing = self.client.table("blocks").select("id").eq("name", block_name).limit(1).execute()
+        if existing.data:
+            block_id = existing.data[0]["id"]
+            self.client.table("blocks").update({"description": block_description}).eq("id", block_id).execute()
+            return block_id
+
+        response = self.client.table("blocks").insert({"name": block_name, "description": block_description}).execute()
+        return response.data[0]["id"]
+
+    def _upsert_week(self, block_id: str, week_number: int) -> str:
+        existing = self.client.table("weeks").select("id").eq("block_id", block_id).eq("week_number", week_number).limit(1).execute()
+        if existing.data:
+            return existing.data[0]["id"]
+
+        response = self.client.table("weeks").insert({"block_id": block_id, "week_number": week_number}).execute()
+        return response.data[0]["id"]
+
+    def _upsert_workout(self, week_id: str, workout_name: str, day_of_week: int, workout_summary: str | None) -> str:
+        existing = (
+            self.client.table("workouts")
+            .select("id")
+            .eq("week_id", week_id)
+            .eq("day_of_week", day_of_week)
+            .eq("name", workout_name)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            workout_id = existing.data[0]["id"]
+            self.client.table("workouts").update({"workout_summary": workout_summary}).eq("id", workout_id).execute()
+            return workout_id
+
+        response = self.client.table("workouts").insert({"week_id": week_id, "name": workout_name, "day_of_week": day_of_week, "workout_summary": workout_summary}).execute()
+        return response.data[0]["id"]
+
+    def _upsert_exercise_template(self, workout_id: str, exercise: dict[str, Any]) -> str:
+        existing = (
+            self.client.table("exercises_template")
+            .select("id")
+            .eq("workout_id", workout_id)
+            .eq("exercise_name", exercise["exercise_name"])
+            .limit(1)
+            .execute()
+        )
+        template_payload = {
+            "workout_id": workout_id,
+            "exercise_name": exercise["exercise_name"],
+            "warm_up_sets": exercise.get("warm_up_sets", 0),
+            "working_sets": exercise.get("working_sets", 1),
+            "rep_range": exercise["rep_range"],
+            "rir_target": exercise.get("rir_target"),
+            "intensity_technique": exercise.get("intensity_technique"),
+            "rest_seconds": exercise.get("rest_seconds", 60),
+            "notes": exercise.get("notes"),
+        }
+
+        if existing.data:
+            template_id = existing.data[0]["id"]
+            self.client.table("exercises_template").update(template_payload).eq("id", template_id).execute()
+            return template_id
+
+        response = self.client.table("exercises_template").insert(template_payload).execute()
+        return response.data[0]["id"]
+
+    def _replace_working_set_templates(self, exercise_template_id: str, working_set_templates: list[dict[str, Any]]) -> None:
+        self.client.table("exercise_working_sets").delete().eq("exercise_template_id", exercise_template_id).execute()
+        if not working_set_templates:
+            return
+
+        payload = [
+            {
+                "exercise_template_id": exercise_template_id,
+                "set_number": item["set_number"],
+                "load": item["load"],
+                "reps": item["reps"],
+                "rest_seconds": item.get("rest_seconds", 60),
+                "notes": item.get("notes"),
+            }
+            for item in working_set_templates
+        ]
+        self.client.table("exercise_working_sets").insert(payload).execute()
 
     def _attach_previous_week_logs(
         self,
@@ -241,14 +373,27 @@ class WorkoutService:
         return current_exercise
 
     def _fetch_previous_week_logs(self, user_id: str, exercise_template_id: str) -> list[dict[str, Any]]:
+        latest_log_response = (
+            self.client.table("user_logs")
+            .select("logged_date")
+            .eq("user_id", user_id)
+            .eq("exercise_template_id", exercise_template_id)
+            .order("logged_date", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if not latest_log_response.data:
+            return []
+
+        latest_logged_date = latest_log_response.data[0]["logged_date"]
         response = (
             self.client.table("user_logs")
             .select("set_number, load, reps, logged_date")
             .eq("user_id", user_id)
             .eq("exercise_template_id", exercise_template_id)
-            .order("logged_date", desc=True)
+            .eq("logged_date", latest_logged_date)
             .order("set_number", desc=False)
-            .limit(2)
             .execute()
         )
         return list(response.data or [])

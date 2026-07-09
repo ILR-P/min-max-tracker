@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import './App.css'
+import CreateWorkoutPage from './components/CreateWorkoutPage'
 import WorkoutDashboard from './components/WorkoutDashboard'
 import { supabase } from './lib/supabaseClient'
 
@@ -64,6 +65,7 @@ export default function App() {
   const [authError, setAuthError] = useState('')
   const [authNotice, setAuthNotice] = useState('')
   const [authSubmitting, setAuthSubmitting] = useState(false)
+  const [page, setPage] = useState('dashboard')
 
   useEffect(() => {
     if (!supabase) {
@@ -152,7 +154,15 @@ export default function App() {
   return (
     <main className="app-shell">
       <SessionBar session={session} onSignOut={handleSignOut} />
-      <WorkoutDashboard session={session} />
+      <nav className="page-tabs">
+        <button type="button" className={page === 'dashboard' ? 'tab-button active' : 'tab-button'} onClick={() => setPage('dashboard')}>
+          Dashboard
+        </button>
+        <button type="button" className={page === 'create' ? 'tab-button active' : 'tab-button'} onClick={() => setPage('create')}>
+          Create workout
+        </button>
+      </nav>
+      {page === 'dashboard' ? <WorkoutDashboard session={session} /> : <CreateWorkoutPage session={session} />}
     </main>
   )
 }
